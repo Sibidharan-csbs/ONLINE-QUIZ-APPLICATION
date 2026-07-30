@@ -1,0 +1,88 @@
+:root {
+  --primary: #4f46e5;
+  --primary-dark: #4338ca;
+  --bg: #f4f6fb;
+}
+
+body {
+  background-color: var(--bg);
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+/* ---------- Auth pages ---------- */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+.auth-card {
+  background: #fff;
+  padding: 2.5rem;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ---------- Navbar ---------- */
+.app-navbar {
+  background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+  padding: 0.9rem 0;
+}
+
+.app-navbar .navbar-brand,
+.app-navbar span {
+  color: #fff !important;
+}
+
+/* ---------- Cards ---------- */
+.quiz-card {
+  border: none;
+  border-radius: 14px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quiz-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.15);
+}
+
+.question-card {
+  border: none;
+  border-radius: 12px;
+  border-left: 4px solid var(--primary);
+}
+
+/* ---------- Timer ---------- */
+.timer-box {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-weight: bold;
+  font-size: 1.1rem;
+  padding: 0.4rem 1rem;
+  border-radius: 8px;
+  letter-spacing: 1px;
+}
+
+.timer-warning {
+  background: #dc3545;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* ---------- Nav pills ---------- */
+.nav-pills .nav-link.active {
+  background-color: var(--primary);
+}
+
+.nav-pills .nav-link {
+  color: #333;
+}

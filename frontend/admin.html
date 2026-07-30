@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard | Online Quiz Application</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg app-navbar">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="admin.html"><i class="bi bi-speedometer2"></i> Admin Dashboard</a>
+    <div class="d-flex align-items-center gap-3">
+      <span id="userName" class="text-white-50"></span>
+      <button class="btn btn-outline-light btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4">
+
+  <ul class="nav nav-pills mb-4">
+    <li class="nav-item"><button class="nav-link active" data-tab="quizzes">Manage Quizzes</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="results">All Results</button></li>
+  </ul>
+
+  <!-- ===== Manage Quizzes ===== -->
+  <div id="quizzesTab">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">Quizzes</h5>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quizModal" onclick="openNewQuizForm()">
+        <i class="bi bi-plus-circle"></i> Create Quiz
+      </button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover bg-white shadow-sm rounded">
+        <thead class="table-dark">
+          <tr><th>Title</th><th>Questions</th><th>Duration</th><th>Total Marks</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="quizTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== All Results ===== -->
+  <div id="resultsTab" class="d-none">
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <input type="text" id="searchBox" class="form-control" placeholder="Search by student or quiz name...">
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover bg-white shadow-sm rounded">
+        <thead class="table-dark">
+          <tr><th>Student</th><th>Quiz</th><th>Score</th><th>%</th><th>Submitted</th></tr>
+        </thead>
+        <tbody id="resultsTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Create / Edit Quiz Modal ===== -->
+<div class="modal fade" id="quizModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="quizModalTitle">Create Quiz</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="quizForm">
+          <input type="hidden" id="quizId">
+          <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input type="text" class="form-control" id="quizTitle" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" id="quizDescription" rows="2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Duration (minutes)</label>
+            <input type="number" class="form-control" id="quizDuration" min="1" required>
+          </div>
+
+          <hr>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Questions</h6>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addQuestionBlock()">
+              <i class="bi bi-plus"></i> Add Question
+            </button>
+          </div>
+          <div id="questionsContainer"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveQuiz()">Save Quiz</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/app.js"></script>
+<script>
+requireRole('ADMIN');
+document.getElementById('userName').textContent = getSession().fullName;
+
+document.querySelectorAll('.nav-pills .nav-link').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-pills .nav-link').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('quizzesTab').classList.toggle('d-none', tab !== 'quizzes');
+    document.getElementById('resultsTab').classList.toggle('d-none', tab !== 'results');
+    if (tab === 'results') loadResults();
+  });
+});
+
+let questionCounter = 0;
+
+function addQuestionBlock(q = null) {
+  questionCounter++;
+  const id = questionCounter;
+  const div = document.createElement('div');
+  div.className = 'card mb-3 question-block';
+  div.dataset.qid = id;
+  div.innerHTML = `
+    <div class="card-body">
+      <div class="d-flex justify-content-between">
+        <label class="form-label fw-bold">Question ${id}</label>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.question-block').remove()">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+      <input type="text" class="form-control mb-2 q-text" placeholder="Question text" value="${q ? escapeHtml(q.questionText) : ''}" required>
+      <input type="number" class="form-control mb-2 q-marks" placeholder="Marks" min="1" style="max-width:120px" value="${q ? q.marks : 1}" required>
+      <label class="form-label small text-muted">Options (select the radio button next to the correct one)</label>
+      <div class="options-container">
+        ${(q ? q.options : [{ optionText: '', correct: true }, { optionText: '', correct: false }])
+          .map((o, i) => optionRow(id, i, o)).join('')}
+      </div>
+      <button type="button" class="btn btn-sm btn-link" onclick="addOptionRow(${id})">+ Add option</button>
+    </div>`;
+  document.getElementById('questionsContainer').appendChild(div);
+}
+
+function optionRow(qid, idx, o) {
+  return `
+    <div class="input-group mb-1 option-row">
+      <span class="input-group-text">
+        <input type="radio" name="correct_${qid}" ${o.correct ? 'checked' : ''} class="opt-correct">
+      </span>
+      <input type="text" class="form-control opt-text" placeholder="Option text" value="${escapeHtml(o.optionText || '')}">
+      <button type="button" class="btn btn-outline-secondary" onclick="this.closest('.option-row').remove()">&times;</button>
+    </div>`;
+}
+
+function addOptionRow(qid) {
+  const block = document.querySelector(`.question-block[data-qid="${qid}"] .options-container`);
+  block.insertAdjacentHTML('beforeend', optionRow(qid, block.children.length, { optionText: '', correct: false }));
+}
+
+function openNewQuizForm() {
+  document.getElementById('quizModalTitle').textContent = 'Create Quiz';
+  document.getElementById('quizForm').reset();
+  document.getElementById('quizId').value = '';
+  document.getElementById('questionsContainer').innerHTML = '';
+  questionCounter = 0;
+  addQuestionBlock();
+}
+
+async function editQuiz(id) {
+  const quiz = (await apiGet('/api/quizzes/admin')).find(q => q.id === id);
+  document.getElementById('quizModalTitle').textContent = 'Edit Quiz';
+  document.getElementById('quizId').value = quiz.id;
+  document.getElementById('quizTitle').value = quiz.title;
+  document.getElementById('quizDescription').value = quiz.description || '';
+  document.getElementById('quizDuration').value = quiz.durationMinutes;
+  document.getElementById('questionsContainer').innerHTML = '';
+  questionCounter = 0;
+  quiz.questions.forEach(q => addQuestionBlock(q));
+  new bootstrap.Modal(document.getElementById('quizModal')).show();
+}
+
+async function saveQuiz() {
+  const questions = [];
+  document.querySelectorAll('.question-block').forEach(block => {
+    const options = [...block.querySelectorAll('.option-row')].map(row => ({
+      optionText: row.querySelector('.opt-text').value,
+      correct: row.querySelector('.opt-correct').checked
+    }));
+    questions.push({
+      questionText: block.querySelector('.q-text').value,
+      marks: parseInt(block.querySelector('.q-marks').value, 10),
+      options
+    });
+  });
+
+  const payload = {
+    title: document.getElementById('quizTitle').value,
+    description: document.getElementById('quizDescription').value,
+    durationMinutes: parseInt(document.getElementById('quizDuration').value, 10),
+    questions
+  };
+
+  const quizId = document.getElementById('quizId').value;
+
+  try {
+    if (quizId) {
+      await apiPut(`/api/quizzes/admin/${quizId}`, payload);
+    } else {
+      await apiPost('/api/quizzes/admin', payload);
+    }
+    bootstrap.Modal.getInstance(document.getElementById('quizModal')).hide();
+    loadQuizzes();
+  } catch (err) {
+    alert(err.message || 'Failed to save quiz');
+  }
+}
+
+async function deleteQuiz(id) {
+  if (!confirm('Delete this quiz permanently?')) return;
+  try {
+    await apiDelete(`/api/quizzes/admin/${id}`);
+    loadQuizzes();
+  } catch (err) {
+    alert(err.message || 'Failed to delete quiz');
+  }
+}
+
+async function loadQuizzes() {
+  const body = document.getElementById('quizTableBody');
+  body.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+  try {
+    const quizzes = await apiGet('/api/quizzes/admin');
+    body.innerHTML = quizzes.map(q => `
+      <tr>
+        <td>${escapeHtml(q.title)}</td>
+        <td>${q.questions.length}</td>
+        <td>${q.durationMinutes} min</td>
+        <td>${q.totalMarks}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary" onclick="editQuiz(${q.id})"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteQuiz(${q.id})"><i class="bi bi-trash"></i></button>
+          <a class="btn btn-sm btn-outline-secondary" href="#" onclick="viewLeaderboard(${q.id}); return false;"><i class="bi bi-trophy"></i></a>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="5" class="text-muted">No quizzes yet.</td></tr>';
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="text-danger">${err.message}</td></tr>`;
+  }
+}
+
+async function viewLeaderboard(id) {
+  try {
+    const board = await apiGet(`/api/attempts/leaderboard/${id}`);
+    const text = board.map(r => `#${r.rank} ${r.studentName} — ${r.score}/${r.totalMarks} (${r.percentage}%)`).join('\n')
+      || 'No attempts yet.';
+    alert('Leaderboard:\n\n' + text);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+let allResults = [];
+async function loadResults() {
+  const body = document.getElementById('resultsTableBody');
+  body.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+  try {
+    allResults = await apiGet('/api/attempts/admin/all');
+    renderResults(allResults);
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="text-danger">${err.message}</td></tr>`;
+  }
+}
+
+function renderResults(results) {
+  const body = document.getElementById('resultsTableBody');
+  body.innerHTML = results.map(r => `
+    <tr>
+      <td>${escapeHtml(r.studentName)}</td>
+      <td>${escapeHtml(r.quizTitle)}</td>
+      <td>${r.score} / ${r.totalMarks}</td>
+      <td>${r.percentage}%</td>
+      <td>${new Date(r.submittedAt).toLocaleString()}</td>
+    </tr>`).join('') || '<tr><td colspan="5" class="text-muted">No results yet.</td></tr>';
+}
+
+document.getElementById('searchBox').addEventListener('input', (e) => {
+  const term = e.target.value.toLowerCase();
+  renderResults(allResults.filter(r =>
+    r.studentName.toLowerCase().includes(term) || r.quizTitle.toLowerCase().includes(term)));
+});
+
+loadQuizzes();
+</script>
+</body>
+</html>

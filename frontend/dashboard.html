@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard | Online Quiz Application</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg app-navbar">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="dashboard.html"><i class="bi bi-mortarboard-fill"></i> Quiz Portal</a>
+    <div class="d-flex align-items-center gap-3">
+      <span id="userName" class="text-white-50"></span>
+      <button class="btn btn-outline-light btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4">
+
+  <ul class="nav nav-pills mb-4" id="tabNav">
+    <li class="nav-item">
+      <button class="nav-link active" data-tab="quizzes">Available Quizzes</button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-tab="history">My Results</button>
+    </li>
+  </ul>
+
+  <div id="quizzesTab">
+    <div id="quizList" class="row g-4"></div>
+  </div>
+
+  <div id="historyTab" class="d-none">
+    <div class="table-responsive">
+      <table class="table table-hover bg-white shadow-sm rounded">
+        <thead class="table-dark">
+          <tr>
+            <th>Quiz</th><th>Score</th><th>Percentage</th><th>Correct</th><th>Wrong</th><th>Rank</th><th>Submitted</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/app.js"></script>
+<script>
+requireRole('STUDENT');
+document.getElementById('userName').textContent = getSession().fullName;
+
+document.querySelectorAll('#tabNav .nav-link').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#tabNav .nav-link').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('quizzesTab').classList.toggle('d-none', tab !== 'quizzes');
+    document.getElementById('historyTab').classList.toggle('d-none', tab !== 'history');
+    if (tab === 'history') loadHistory();
+  });
+});
+
+async function loadQuizzes() {
+  const list = document.getElementById('quizList');
+  list.innerHTML = '<p class="text-muted">Loading quizzes...</p>';
+  try {
+    const quizzes = await apiGet('/api/quizzes');
+    if (quizzes.length === 0) {
+      list.innerHTML = '<p class="text-muted">No quizzes are available right now. Check back later!</p>';
+      return;
+    }
+    list.innerHTML = quizzes.map(q => `
+      <div class="col-md-6 col-lg-4">
+        <div class="card quiz-card h-100 shadow-sm">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">${escapeHtml(q.title)}</h5>
+            <p class="card-text text-muted flex-grow-1">${escapeHtml(q.description || 'No description provided.')}</p>
+            <div class="d-flex justify-content-between text-muted small mb-3">
+              <span><i class="bi bi-clock"></i> ${q.durationMinutes} min</span>
+              <span><i class="bi bi-award"></i> ${q.totalMarks} marks</span>
+            </div>
+            <a href="quiz.html?id=${q.id}" class="btn btn-primary mt-auto">Start Quiz</a>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    list.innerHTML = `<p class="text-danger">${err.message}</p>`;
+  }
+}
+
+async function loadHistory() {
+  const body = document.getElementById('historyBody');
+  body.innerHTML = '<tr><td colspan="7" class="text-muted">Loading...</td></tr>';
+  try {
+    const results = await apiGet('/api/attempts/my-history');
+    if (results.length === 0) {
+      body.innerHTML = '<tr><td colspan="7" class="text-muted">You have not attempted any quiz yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = results.map(r => `
+      <tr>
+        <td>${escapeHtml(r.quizTitle)}</td>
+        <td>${r.score} / ${r.totalMarks}</td>
+        <td>${r.percentage}%</td>
+        <td class="text-success">${r.correctCount}</td>
+        <td class="text-danger">${r.wrongCount}</td>
+        <td>#${r.rank}</td>
+        <td>${new Date(r.submittedAt).toLocaleString()}</td>
+      </tr>`).join('');
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="7" class="text-danger">${err.message}</td></tr>`;
+  }
+}
+
+loadQuizzes();
+</script>
+</body>
+</html>

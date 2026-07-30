@@ -1,0 +1,21 @@
+# Maven output
+**/target/
+*.class
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Logs & temp files
+*.log
+*.tmp

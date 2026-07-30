@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Take Quiz | Online Quiz Application</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg app-navbar">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="dashboard.html">Quiz Portal</a>
+    <div id="timerBox" class="timer-box">--:--</div>
+  </div>
+</nav>
+
+<div class="container py-4" id="quizContainer">
+  <p class="text-muted">Loading quiz...</p>
+</div>
+
+<!-- Result modal shown immediately after submission -->
+<div class="modal" tabindex="-1" id="resultModal" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content text-center p-4">
+      <h3 class="mb-3">Quiz Submitted!</h3>
+      <div id="resultBody"></div>
+      <a href="dashboard.html" class="btn btn-primary mt-4">Back to Dashboard</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/app.js"></script>
+<script>
+requireRole('STUDENT');
+
+const params = new URLSearchParams(window.location.search);
+const quizId = params.get('id');
+let attemptId = null;
+let timerInterval = null;
+let remainingSeconds = 0;
+let submitted = false; // client-side guard to block double-click, real guard is server-side
+
+async function init() {
+  const container = document.getElementById('quizContainer');
+  try {
+    // 1. Start the attempt first (server rejects if already attempted -> prevents re-entry)
+    const startRes = await apiPost(`/api/attempts/start/${quizId}`, {});
+    attemptId = startRes.attemptId;
+
+    // 2. Load the questions (correct answers are never sent to the browser)
+    const quiz = await apiGet(`/api/quizzes/${quizId}/attempt`);
+    renderQuiz(quiz);
+
+    // 3. Start the countdown timer
+    remainingSeconds = quiz.durationMinutes * 60;
+    startTimer();
+  } catch (err) {
+    container.innerHTML = `<div class="alert alert-danger">${err.message}</div>
+      <a href="dashboard.html" class="btn btn-secondary">Back to Dashboard</a>`;
+  }
+}
+
+function renderQuiz(quiz) {
+  const container = document.getElementById('quizContainer');
+  container.innerHTML = `
+    <h3>${escapeHtml(quiz.title)}</h3>
+    <p class="text-muted">${escapeHtml(quiz.description || '')}</p>
+    <form id="quizForm">
+      ${quiz.questions.map((q, idx) => `
+        <div class="card question-card mb-3">
+          <div class="card-body">
+            <h6>Q${idx + 1}. ${escapeHtml(q.questionText)} <span class="text-muted small">(${q.marks} marks)</span></h6>
+            ${q.options.map(opt => `
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="q_${q.id}" id="opt_${opt.id}" value="${opt.id}">
+                <label class="form-check-label" for="opt_${opt.id}">${escapeHtml(opt.optionText)}</label>
+              </div>`).join('')}
+          </div>
+        </div>`).join('')}
+      <button type="submit" class="btn btn-success btn-lg w-100" id="submitBtn">Submit Quiz</button>
+    </form>`;
+
+  document.getElementById('quizForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitQuiz(quiz);
+  });
+}
+
+function startTimer() {
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    remainingSeconds--;
+    updateTimerDisplay();
+    if (remainingSeconds <= 0) {
+      clearInterval(timerInterval);
+      submitQuiz(null, true); // time's up -> auto-submit whatever is answered
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(remainingSeconds / 60).toString().padStart(2, '0');
+  const s = (remainingSeconds % 60).toString().padStart(2, '0');
+  const box = document.getElementById('timerBox');
+  box.textContent = `${m}:${s}`;
+  box.classList.toggle('timer-warning', remainingSeconds <= 30);
+}
+
+async function submitQuiz(quiz, auto = false) {
+  if (submitted) return; // block double submission from the client side
+  submitted = true;
+  clearInterval(timerInterval);
+
+  const submitBtn = document.getElementById('submitBtn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+
+  // Collect answers from the form; unanswered questions are sent with selectedOptionId = null
+  const form = document.getElementById('quizForm');
+  const answers = [];
+  document.querySelectorAll('.question-card').forEach(card => {
+    const radio = card.querySelector('input[type=radio]:checked');
+    const name = card.querySelector('input[type=radio]').name; // q_<id>
+    const questionId = parseInt(name.split('_')[1], 10);
+    answers.push({ questionId, selectedOptionId: radio ? parseInt(radio.value, 10) : null });
+  });
+
+  try {
+    const result = await apiPost(`/api/attempts/${attemptId}/submit`, { answers });
+    showResult(result, auto);
+  } catch (err) {
+    alert(err.message || 'Submission failed');
+    submitted = false;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Quiz'; }
+  }
+}
+
+function showResult(result, auto) {
+  document.getElementById('resultBody').innerHTML = `
+    ${auto ? '<p class="text-warning">Time is up — your answers were submitted automatically.</p>' : ''}
+    <h1 class="display-5 fw-bold text-primary">${result.score} / ${result.totalMarks}</h1>
+    <p class="fs-5">${result.percentage}%</p>
+    <div class="d-flex justify-content-center gap-4 mt-3">
+      <div><span class="text-success fw-bold">${result.correctCount}</span><br><small>Correct</small></div>
+      <div><span class="text-danger fw-bold">${result.wrongCount}</span><br><small>Wrong</small></div>
+      <div><span class="fw-bold">#${result.rank}</span><br><small>Rank</small></div>
+    </div>`;
+  new bootstrap.Modal(document.getElementById('resultModal')).show();
+}
+
+init();
+</script>
+</body>
+</html>
